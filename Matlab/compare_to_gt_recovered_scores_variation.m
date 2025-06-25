@@ -111,8 +111,7 @@ Y = arrayToRowVector(DataMatrix3D);
 meanShapeVec = mean(Y, 1);
 nPCsToUse = 5;
 
-nVertices = size(DataMatrix3D,1);
-nSynthetic = size(Y,1);
+nVertices = size(DataMatrix3D,1);nSynthetic = size(Y,1);
 
 variation_levels = [2 5 10 20 30 40 50 100 200 400];
 results = struct();
@@ -377,13 +376,14 @@ for variation_idx = 1:length(variation_levels)
             0, 'b', 'LineWidth',2, 'MaxHeadSize',0.8);
 
     % 6) Save figure
-    outputDir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\PC_vectors_simulation';
-    figName = sprintf('meanShape_PC1_variation_%d', variation_idx);
+    output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\PC_vectors_simulation';
+    % Use the variation level directly in the filename
+    variation_val = variation_levels(variation_idx);
+    figName = sprintf('meanShape_PC1_variation_%d', variation_val);
     % savefig(hFig, [figName '.fig']);
-    saveas(hFig, [figName '.png']);
-    saveas(hFig, fullfile(outputDir, [figName '.png']));
+    % saveas(hFig, [figName '.png']);
+    saveas(hFig, fullfile(output_dir, [figName '.png']));
     close(hFig);
-
 
     %% --- EVALUATION METRICS -----------------------------------------
 
@@ -452,6 +452,15 @@ for variation_idx = 1:length(variation_levels)
             results(variation_idx).d_std = d_std;
             results(variation_idx).d_con = d_con;
         end
+
+        % Save as csv
+        output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\PC_vectors_simulation';
+        results_table = struct2table(results);
+    
+        % Use the variation level directly in the filename
+        variation_val = variation_levels(variation_idx);
+        csv_filename = fullfile(output_dir, sprintf('results_variation_%d.csv', variation_val));
+        writetable(results_table, csv_filename);
     end
 
 end % Ende der variation_levels Schleife
