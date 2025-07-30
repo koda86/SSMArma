@@ -85,7 +85,7 @@ meanPoints = mean(DataMatrix3D,3);
 %% Füße plotten
 n_feet = size(DataMatrix3D, 3); % number of feet to visualize
 
-mFace = shape3D;
+mFace = shape3D; % shape3d = meshmonk object
 v=viewer(mFace);
 for f = 1:n_feet
     shp = shape3D; % create shape 3D
@@ -105,171 +105,6 @@ Y = arrayStructure2Vector(DataMatrix3D);
 % Percentage of total variance explained by each PC
 explained = latent / sum(latent) * 100;
 
-%% Visualise principal component by transforming average face
-
-GPA = 'groundtruth';
-
-PCnum = 1; % which PC to plot
-
-Transform = arrayVector2Structure(coeff(:,PCnum)'); % Reshapes that 1×(3N) row into an N×3 structure (or array of structs) so you now have a 3D displacement vector at each vertex.
-sigma = sqrt(latent(PCnum)); % latent holds the variances (eigenvalues) of each principal component
-k = 3; % Scaling factor, e.g. ±3 SD
-
-AverageShape = shape3D;
-AverageShape.Vertices = meanPoints;
-
-% Apply PC to visualize -3σ and +3σ deformations
-PCminusMorph = clone(AverageShape); % clone makes a deep copy of the mean shape
-PCminusMorph.Vertices = meanPoints + Transform*sigma*-k;
-
-PCmeanMorph = clone(AverageShape); % Mean shape, no deformation
-
-PCplusMorph = clone(AverageShape);
-PCplusMorph.Vertices = meanPoints + Transform*sigma*k;
-
-% Set the mesh color to black
-PCminusMorph.SingleColor = [0 0 0];
-PCmeanMorph.SingleColor = [0 0 0];
-PCplusMorph.SingleColor = [0 0 0];
-
-% Create three plots (-3*sigma, mean, 3*sigma). Plot each in a separate
-% viewer.
-
-% Viewer 1 (mean - 3*sigma) -----------------------------------------------
-v1 = viewer(PCminusMorph);
-set(gcf, 'Color', [1 1 1]); % Set white background
-set(gca, 'Color', [1 1 1]); % Set white background
-% title('PCminusMorph');
-v1.SceneLightLinked = true;
-v1.SceneLightVisible = true;
-
-% Export as .fig
-cd 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\visualize_PCs';
-
-se0 = "n";
-se1 = num2str(temporary_number_objects);
-se2 = "_";
-se3 = num2str(variation_idx);
-se4 = "_PC";
-se5 = num2str(PCnum);
-se6 = "_minus_morph_";
-se7 = GPA;
-se8 = ".fig";
-sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-
-% savefig(gcf, sges);
-
-% Export as .png
-
-% Variante 1 (mit top, bottom, und medial view)
-% Define the specific desired views
-angles = {
-    [0, 1, 0];  % Top view (bird perspective, transversal plane)
-    [0, 0, 1];  % Medial side view (sagittal plane, medial view)
-    [0, -1, 0];  % Bottom view (observer below the foot)
-};
-
-% Corresponding camera-up vectors
-camups = {
-    [0, 0, 0];  % top view: heel bottom, toes top
-    [0, 1, 0];  % medial side view: vertical axis up
-    [0, 0, 0];  % bottom view: heel top, toes bottom
-};
-
-view_names = {'top', 'medial', 'bottom'};
-
-for i = 1:length(angles)
-    figHandle = v1.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_minus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-
-% Viewer 2 (mean) ---------------------------------------------------------
-v2 = viewer(PCmeanMorph);
-
-% Set white background
-set(gcf, 'Color', [1 1 1]);
-set(gca, 'Color', [1 1 1]);
-
-% title('PCmeanMorph');
-v2.SceneLightLinked = true;
-v2.SceneLightVisible = true;
-
-se8 = ".fig";
-sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-
-% Export as .fig
-savefig(gcf, sges);
-
-% Export as .png
-for i = 1:length(angles)
-    figHandle = v2.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_mean_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-% Viewer 3 (mean + 3*sigma) -----------------------------------------------
-v3 = viewer(PCplusMorph);
-
-% Set white background
-set(gcf, 'Color', [1 1 1]);
-set(gca, 'Color', [1 1 1]);
-
-% title('PCplusMorph');
-v3.SceneLightLinked = true;
-v3.SceneLightVisible = true;
-
-% Export as .fig
-% se8 = ".fig";
-% sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-% savefig(gcf, sges);
-
-% Export as .png
-for i = 1:length(angles)
-    figHandle = v3.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_plus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-
-
-
-
-
 
 %% Generate synthetic shapes from PCA variances
 Y = arrayToRowVector(DataMatrix3D);
@@ -280,17 +115,50 @@ nVertices = size(DataMatrix3D,1);
 
 meanShapeArray = rowVectorToArray(meanShapeVec); % Convert mean shape to array
 
-% Define clean foot-length mode
+% Define symmetric foot-length mode (to be used as PC2)
 x_coords = meanShapeArray(:,1);
-x_norm = (x_coords - min(x_coords)) / (max(x_coords) - min(x_coords));
+x_min = min(x_coords);
+x_max = max(x_coords);
+
+% Normalize x-coordinates to range [-1, 1] for uniform proportional stretching
+x_centered = 2 * (x_coords - x_min) / (x_max - x_min) - 1;
+
 footLengthVec = zeros(nVertices, 3);
-footLengthVec(:,1) = x_norm; % horizontal stretching
+footLengthVec(:,1) = x_centered;
+
+% Flatten and normalize
 footLengthVec_flat = arrayToRowVector(footLengthVec);
 footLengthVec_flat = footLengthVec_flat / norm(footLengthVec_flat);
 
-ground_truth_pcs = [coeff(:,1), footLengthVec_flat'];
+% Calibrate PC2 so that 1 unit = 1 mm foot length change
+% Temporary ground truth matrix (coeff(:,1) is still PC1)
+ground_truth_pcs_temp = [coeff(:,1), footLengthVec_flat'];
 
-foot_length_levels = [2 5 10 20 30 40 50 100];
+% Generate shapes with ±1 unit of PC2
+shape_plus1  = meanShapeVec + [0, 1] * ground_truth_pcs_temp';
+shape_minus1 = meanShapeVec + [0, -1] * ground_truth_pcs_temp';
+
+% Convert to 3D shape arrays
+foot_plus1  = rowVectorToArray(shape_plus1);
+foot_minus1 = rowVectorToArray(shape_minus1);
+
+% Compute foot length as x-range
+len_plus1  = max(foot_plus1(:,1)) - min(foot_plus1(:,1));
+len_minus1 = max(foot_minus1(:,1)) - min(foot_minus1(:,1));
+
+% Foot length difference caused by unit PC2
+delta_length_per_unit = (len_plus1 - len_minus1) / 2;
+fprintf('[PC2 calibration] Symmetric PC2 causes %.2f mm change per unit weight.\n', delta_length_per_unit);
+
+% Rescale to make 1 unit weight = 1 mm change in foot length
+scaling_factor = 1 / delta_length_per_unit;
+footLengthVec_flat_scaled = footLengthVec_flat * scaling_factor;
+
+% === Final ground truth PCs (PC1 from real PCA, PC2 = calibrated foot length) ===
+ground_truth_pcs = [coeff(:,1), footLengthVec_flat_scaled'];
+
+foot_length_levels = [0, 2, 5, 10, 20, 30, 40, 50]; % in mm
+% foot_length_levels = [0, 2, 50]; % in mm
 results = struct();
 
 nPCsToUse = size(ground_truth_pcs, 2); % 5;
@@ -300,7 +168,7 @@ for variation_idx = 1:length(foot_length_levels)
     % Build synthetic shapes by sampling PC1 & PC2 weights ----------------
     
     % Define the variation amplitude for PC1 (arch height) and PC2 (foot length)
-    L_shape = 20; % fixed shape variation along PC1
+    L_shape = 40; % fixed shape variation along PC1
     L_length = foot_length_levels(variation_idx); % variable: foot length variation along PC2
     
     useDeterministicWeights = true;
@@ -325,7 +193,6 @@ for variation_idx = 1:length(foot_length_levels)
     W_full(:,2) = W(:,2); % foot length (inserted as 2nd PC)
     
     SyntheticData3D = zeros(nVertices, 3, nSynthetic);
-    % ground_truth_pcs = coeff(:,1:nPCsToUse);
     
     for i = 1:nSynthetic
         weights = W_full(i,:); % 1×nPCsToUse
@@ -333,38 +200,232 @@ for variation_idx = 1:length(foot_length_levels)
         SyntheticData3D(:,:,i) = rowVectorToArray(shapeVec);
     end
 
+    %% What does a foot length variation level of 2 correspond to in terms of EU shoe sizes?
+    % % Generate foot with variation level 0 (mean shape)
+    % foot0 = meanShapeVec;
+    % 
+    % % Generate foot with variation level 2 (lengthened)
+    % foot2 = meanShapeVec + foot_length_levels(variation_idx) * footLengthVec_flat_scaled;
+    % 
+    % % Reshape and extract x-length
+    % foot0_array = rowVectorToArray(foot0);
+    % foot2_array = rowVectorToArray(foot2);
+    % 
+    % len0 = max(foot0_array(:,1)) - min(foot0_array(:,1));
+    % len2 = max(foot2_array(:,1)) - min(foot2_array(:,1));
+    % 
+    % delta_mm = len2 - len0;
+
     %% Füße plotten
-    n_feet = size(SyntheticData3D, 3); % number of feet to visualize
+    % n_feet = size(SyntheticData3D, 3); % number of feet to visualize
+    % 
+    % mFace = shape3D;
+    % v=viewer(mFace);
+    % 
+    % for f = 1:5 % n_feet
+    %     shp = shape3D;
+    %     shp.Vertices = SyntheticData3D(:,:,f);
+    % 
+    %     viewer(shp,v);
+    % end
+    % 
+    % set(gcf, 'Color', 'w'); % white background
+    % set(gca, 'Color', 'w'); % white axes background
+    % axis tight off; % remove axes and fit bounds
+    % camproj('orthographic'); % optional: parallel view
+    % set(gca, 'Position', [0 0 1 1]); % remove all margins
 
-    mFace = shape3D;
-    v=viewer(mFace);
+    % % Save figure
+    % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\simulated_point_clouds';
+    % variation_val = foot_length_levels(variation_idx);
+    % figName = sprintf('pointcloud_variation_%d', variation_val);
+    % 
+    % % Save as clean PNG using exportgraphics
+    % exportgraphics(gca, fullfile(output_dir, [figName '.png']), ...
+    %     'BackgroundColor', 'white', ...
+    %     'ContentType', 'image', ...
+    %     'Resolution', 300);
+    % 
+    % close(gcf);
 
-    for f = 1:n_feet
-        shp = shape3D;
-        shp.Vertices = SyntheticData3D(:,:,f);
+    % %% Get the range of x-coordinates as a proxy for foot length from a 3D point cloud
+    % 
+    % % x := length axis of the foot
+    % foot_lengths = zeros(n_feet,1);
+    % 
+    % for i = 1:n_feet
+    %     x_coords = DataMatrix3D(:,1,i); % x-axis slice for foot i
+    %     foot_lengths(i) = max(x_coords) - min(x_coords);
+    % end
+    % 
+    % range_length = [min(foot_lengths), max(foot_lengths)];
+    % disp(['Foot length range: ', num2str(range_length(1)), '–', num2str(range_length(2)), ' mm']);
 
-        viewer(shp,v);
-    end
 
-    set(gcf, 'Color', 'w'); % white background
-    set(gca, 'Color', 'w'); % white axes background
-    axis tight off; % remove axes and fit bounds
-    camproj('orthographic'); % optional: parallel view
-    set(gca, 'Position', [0 0 1 1]); % remove all margins
+    %% Visualise principal component by transforming average face
 
-    % Save figure
-    output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\simulated_point_clouds';
-    variation_val = foot_length_levels(variation_idx);
-    figName = sprintf('pointcloud_variation_%d', variation_val);
+    % Compute the shared mean shape ONCE after generating the synthetic data
+    meanShapeVec = mean(arrayToRowVector(SyntheticData3D), 1); 
+    sharedMean = rowVectorToArray(meanShapeVec);  % N × 3
 
-    % Save as clean PNG using exportgraphics
-    exportgraphics(gca, fullfile(output_dir, [figName '.png']), ...
-        'BackgroundColor', 'white', ...
-        'ContentType', 'image', ...
-        'Resolution', 300);
+    GPA = 'groundtruth';
     
-    % Close the figure if desired
-    close(gcf);
+    PCnum = 1; % which PC to plot
+    
+    Transform = arrayVector2Structure(coeff(:,PCnum)'); % Reshapes that 1×(3N) row into an N×3 structure (or array of structs) so you now have a 3D displacement vector at each vertex.
+    sigma = sqrt(latent(PCnum)); % latent holds the variances (eigenvalues) of each principal component
+    k = 3; % Scaling factor
+    
+    AverageShape = shape3D;
+    AverageShape.Vertices = sharedMean;
+    
+    % Apply PC to visualize -3σ and +3σ deformations
+    PCminusMorph = clone(AverageShape); % clone makes a deep copy of the mean shape
+    PCminusMorph.Vertices = sharedMean + Transform*sigma*-k;
+    
+    PCmeanMorph = clone(AverageShape); % Mean shape, no deformation
+    PCmeanMorph.Vertices = sharedMean;
+    
+    PCplusMorph = clone(AverageShape);
+    PCplusMorph.Vertices = sharedMean + Transform*sigma*k;
+    
+    % Set the mesh color to black
+    PCminusMorph.SingleColor = [0 0 0];
+    PCmeanMorph.SingleColor = [0 0 0];
+    PCplusMorph.SingleColor = [0 0 0];
+    
+    % Create three plots (-3*sigma, mean, 3*sigma). Plot each in a separate
+    % viewer.
+    
+    % Viewer 1 (mean - 3*sigma) -----------------------------------------------
+    v1 = viewer(PCminusMorph);
+    set(gcf, 'Color', [1 1 1]); % Set white background
+    set(gca, 'Color', [1 1 1]); % Set white background
+    % title('PCminusMorph');
+    v1.SceneLightLinked = true;
+    v1.SceneLightVisible = true;
+    
+    % Export as .fig
+    cd 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\visualize_PCs';
+    
+    se0 = "n";
+    se1 = num2str(temporary_number_objects);
+    se2 = "_";
+    se3 = num2str(variation_idx);
+    se4 = "_PC";
+    se5 = num2str(PCnum);
+    se6 = "_minus_morph_";
+    se7 = GPA;
+    se8 = ".fig";
+    sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
+    
+    % savefig(gcf, sges);
+    
+    % Export as .png
+    
+    % Variante 1 (mit top, bottom, und medial view)
+    % Define the specific desired views
+    angles = {
+        [0, 1, 0];  % Top view (bird perspective, transversal plane)
+        [0, 0, 1];  % Medial side view (sagittal plane, medial view)
+        [0, -1, 0];  % Bottom view (observer below the foot)
+    };
+    
+    % Corresponding camera-up vectors
+    camups = {
+        [0, 0, 0];  % top view: heel bottom, toes top
+        [0, 1, 0];  % medial side view: vertical axis up
+        [0, 0, 0];  % bottom view: heel top, toes bottom
+    };
+    
+    view_names = {'top', 'medial', 'bottom'};
+    
+    for i = 1:length(angles)
+        figHandle = v1.Figure;
+        figHandle.Color = [1 1 1]; % White background
+        ax = findall(figHandle, 'Type', 'Axes');
+        set(ax, 'Color', [1 1 1]);
+    
+        % Set view angles explicitly
+        view(angles{i});
+        camup(camups{i});
+    
+        % Construct a clear filename for export
+        filename = sprintf('%s%s_%s_PC%d_minus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
+    
+        % Export as PNG
+        exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
+    end
+    
+    
+    % Viewer 2 (mean) ---------------------------------------------------------
+    v2 = viewer(PCmeanMorph);
+    
+    % Set white background
+    set(gcf, 'Color', [1 1 1]);
+    set(gca, 'Color', [1 1 1]);
+    
+    % title('PCmeanMorph');
+    v2.SceneLightLinked = true;
+    v2.SceneLightVisible = true;
+    
+    se8 = ".fig";
+    sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
+    
+    % Export as .fig
+    savefig(gcf, sges);
+    
+    % Export as .png
+    for i = 1:length(angles)
+        figHandle = v2.Figure;
+        figHandle.Color = [1 1 1]; % White background
+        ax = findall(figHandle, 'Type', 'Axes');
+        set(ax, 'Color', [1 1 1]);
+    
+        % Set view angles explicitly
+        view(angles{i});
+        camup(camups{i});
+    
+        % Construct a clear filename for export
+        filename = sprintf('%s%s_%s_PC%d_mean_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
+    
+        % Export as PNG
+        exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
+    end
+    
+    % Viewer 3 (mean + 3*sigma) -----------------------------------------------
+    v3 = viewer(PCplusMorph);
+    
+    % Set white background
+    set(gcf, 'Color', [1 1 1]);
+    set(gca, 'Color', [1 1 1]);
+    
+    % title('PCplusMorph');
+    v3.SceneLightLinked = true;
+    v3.SceneLightVisible = true;
+    
+    % Export as .fig
+    % se8 = ".fig";
+    % sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
+    % savefig(gcf, sges);
+    
+    % Export as .png
+    for i = 1:length(angles)
+        figHandle = v3.Figure;
+        figHandle.Color = [1 1 1]; % White background
+        ax = findall(figHandle, 'Type', 'Axes');
+        set(ax, 'Color', [1 1 1]);
+    
+        % Set view angles explicitly
+        view(angles{i});
+        camup(camups{i});
+    
+        % Construct a clear filename for export
+        filename = sprintf('%s%s_%s_PC%d_plus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
+    
+        % Export as PNG
+        exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
+    end
     
     %% Standard GPA
     
@@ -426,17 +487,79 @@ for variation_idx = 1:length(foot_length_levels)
     end
     
     %% Füße plotten
-    % n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
+    n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
+
+    mFace = shape3D;
+    v=viewer(mFace);
+    for f = 1:n_feet
+        shp = shape3D; % create shape 3D
+        shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
+
+        viewer(shp,v);
+    end
     % 
-    % mFace = shape3D;
-    % v=viewer(mFace);
-    % for f = 1:n_feet
-    %     shp = shape3D; % create shape 3D
-    %     shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
+    % % Save the figure
+    % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK';
+    % fig_name = 'standardGPA_foot_overlay';
     % 
-    %     viewer(shp,v);
+    % % Get current figure handle
+    % hFig = gcf;
+    % 
+    % % Save as high-res .png
+    % exportgraphics(hFig, fullfile(output_dir, [fig_name '.png']), 'Resolution', 300, 'BackgroundColor', 'white');
+
+    % %% Test
+    % X = reshape(SyntheticData3D_standardGPA, [], nShapes)';
+    % [coeff, ~, ~] = pca(X);
+    % 
+    % PC1 = reshape(coeff(:,1), [], 3); % N × 3
+    % 
+    % % Compute average PC1 direction vector
+    % v_pc1 = mean(PC1, 1);
+    % v_pc1 = v_pc1 / norm(v_pc1); % normalize
+    % disp('First PC average direction:');
+    % disp(v_pc1);
+    % 
+    % % Clean foot-length mode (already normalized in your code)
+    % footLengthVec_clean = arrayToRowVector(footLengthVec); 
+    % footLengthVec_clean = footLengthVec_clean / norm(footLengthVec_clean);
+    % footLengthVec_clean = reshape(footLengthVec_clean, [], 3);
+    % 
+    % % Compute average direction of the clean foot-length mode
+    % v_clean = mean(footLengthVec_clean, 1);
+    % v_clean = v_clean / norm(v_clean);
+    % 
+    % cos_sim = dot(v_pc1, v_clean);
+    % fprintf('Cosine similarity between PC1 and clean foot-length mode: %.4f\n', cos_sim);
+    % 
+    % angle_deg = acosd(cos_sim);
+    % fprintf('Angle between PC1 and clean foot-length mode: %.2f degrees\n', angle_deg);
+    % 
+    % % Visualize both vectors in 3D
+    % meanShape = mean(SyntheticData3D_standardGPA, 3);  % Mean foot shape
+    % centroid = mean(meanShape,1);                      % Origin for arrows
+    % arrowLength = 40;                                  % Adjust length if needed
+    % 
+    % figure;
+    % scatter3(meanShape(:,1), meanShape(:,2), meanShape(:,3), 10, 'k'); hold on;
+    % quiver3(centroid(1), centroid(2), centroid(3), ...
+    %         arrowLength*v_pc1(1), arrowLength*v_pc1(2), arrowLength*v_pc1(3), ...
+    %         'r', 'LineWidth', 2, 'MaxHeadSize', 2);
+    % quiver3(centroid(1), centroid(2), centroid(3), ...
+    %         arrowLength*v_clean(1), arrowLength*v_clean(2), arrowLength*v_clean(3), ...
+    %         'b', 'LineWidth', 2, 'MaxHeadSize', 2);
+    % 
+    % legend('Mean Shape', 'PC1 Direction', 'Clean Foot Length Mode');
+    % title(sprintf('PC1 vs Clean Foot Length Mode (Angle = %.2f°)', angle_deg));
+    % axis equal; grid on; view(3);
+
+    % %% === Restore original scale of standard GPA shapes ===
+    % SyntheticData3D_standardGPA_rescaled = SyntheticData3D_standardGPA;
+    % 
+    % for f = 1:nShapes
+    %     SyntheticData3D_standardGPA_rescaled(:,:,f) = SyntheticData3D_standardGPA(:,:,f) * centroid_sizes(f);
     % end
-    
+
     %% Principal Components Analysis
     
     % Represent each foot as a row of a 2D matrix
@@ -450,23 +573,21 @@ for variation_idx = 1:length(foot_length_levels)
 
     %% Visualise principal component by transforming average face
 
-    PCnum = 1; % which PC to plot
-
-    Transform = arrayVector2Structure(coeff_sGPA(:,PCnum)'); % Reshapes that 1×(3N) row into an N×3 structure (or array of structs) so you now have a 3D displacement vector at each vertex.
-    sigma = sqrt(latent_sGPA(PCnum)); % latent holds the variances (eigenvalues) of each principal component
-    k = 3; % Scaling factor, e.g. ±3 SD
+    Transform = arrayVector2Structure(coeff_sGPA(:,PCnum)');
+    sigma = sqrt(latent_sGPA(PCnum));
     
     AverageShape = shape3D;
-    AverageShape.Vertices = meanPoints;
+    AverageShape.Vertices = sharedMean;
     
     % Apply PC to visualize -3σ and +3σ deformations
-    PCminusMorph = clone(AverageShape); % clone makes a deep copy of the mean shape
-    PCminusMorph.Vertices = meanPoints + Transform*sigma*-k;
+    PCminusMorph = clone(AverageShape);
+    PCminusMorph.Vertices = sharedMean + Transform*sigma*-k;
     
-    PCmeanMorph = clone(AverageShape); % Mean shape, no deformation
+    PCmeanMorph = clone(AverageShape);
+    PCmeanMorph.Vertices = sharedMean;
     
     PCplusMorph = clone(AverageShape);
-    PCplusMorph.Vertices = meanPoints + Transform*sigma*k;
+    PCplusMorph.Vertices = sharedMean + Transform*sigma*k;
     
     % Set the mesh color to black
     PCminusMorph.SingleColor = [0 0 0];
@@ -684,17 +805,27 @@ for variation_idx = 1:length(foot_length_levels)
     end
     
     %% Füße plotten
-    % n_feet = size(SyntheticData3D_constrainedGPA, 3); % number of feet to visualize
+    n_feet = size(SyntheticData3D_constrainedGPA, 3); % number of feet to visualize
+
+    mFace = shape3D;
+    v=viewer(mFace);
+    for f = 1:n_feet
+        shp = shape3D; % create shape 3D
+        shp.Vertices = SyntheticData3D_constrainedGPA(:,:,f);
+
+        viewer(shp,v);
+    end
     % 
-    % mFace = shape3D;
-    % v=viewer(mFace);
-    % for f = 1:n_feet
-    %     shp = shape3D; % create shape 3D
-    %     shp.Vertices = SyntheticData3D_constrainedGPA(:,:,f);
+    % % Save the figure
+    % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK';
+    % fig_name = 'constrainedGPA_foot_overlay';
     % 
-    %     viewer(shp,v);
-    % end
-    
+    % % Get current figure handle
+    % hFig = gcf;
+    % 
+    % % Save as high-res .png
+    % exportgraphics(hFig, fullfile(output_dir, [fig_name '.png']), 'Resolution', 300, 'BackgroundColor', 'white');
+
     %% Principal Components Analysis
     
     % Represent each foot as a row of a 2D matrix
@@ -705,14 +836,31 @@ for variation_idx = 1:length(foot_length_levels)
     
     % Percentage of total variance explained by each PCverify if PC1 really captures foot length
     explained_cGPA = latent_cGPA / sum(latent_cGPA) * 100;
+
+    %% === Visualize one overlay: rescaled standard GPA vs. constrained GPA ===
+    % f = 1; % Foot index to visualize
+    % 
+    % pts_con = SyntheticData3D_constrainedGPA(:,:,f);
+    % pts_std = SyntheticData3D_standardGPA_rescaled(:,:,f);
+    % 
+    % figure;
+    % hold on; axis equal;
+    % title(sprintf('Foot %d overlay: Constrained GPA (blue) vs. Standard GPA (rescaled, red)', f));
+    % 
+    % plot3(pts_con(:,1), pts_con(:,2), pts_con(:,3), 'b.');
+    % plot3(pts_std(:,1), pts_std(:,2), pts_std(:,3), 'r.');
+    % 
+    % xlabel('X'); ylabel('Y'); zlabel('Z');
+    % grid on; view(3);
+    % legend('Constrained GPA', 'Standard GPA (rescaled)');
+
+    % rmse = sqrt(mean(sum((pts_con - pts_std).^2, 2)));
+    % fprintf('RMSE between constrained and rescaled standard GPA shapes (foot %d): %.4f mm\n', f, rmse);
     
     %% Visualise principal component by transforming average face
-
-    PCnum = 1; % which PC to plot
     
-    Transform = arrayVector2Structure(coeff_cGPA(:,PCnum)'); % Reshapes that 1×(3N) row into an N×3 structure (or array of structs) so you now have a 3D displacement vector at each vertex.
-    sigma = sqrt(latent_cGPA(PCnum)); % latent holds the variances (eigenvalues) of each principal component
-    k = 3; % Choose a scaling factor (e.g. 3 standard deviations):
+    Transform = arrayVector2Structure(coeff_cGPA(:,PCnum)');
+    sigma = sqrt(latent_cGPA(PCnum));
     
     AverageShape = shape3D;
     AverageShape.Vertices = meanPoints;
@@ -720,12 +868,13 @@ for variation_idx = 1:length(foot_length_levels)
     % add transform scaled according to  z-score of +/- 3 onto average vertices
     % to visualise PC
     PCminusMorph = clone(AverageShape); % clone makes a deep copy of the mean shape
-    PCminusMorph.Vertices = meanPoints + Transform*sigma*-k;
+    PCminusMorph.Vertices = sharedMean + Transform*sigma*-k;
     
     PCmeanMorph = clone(AverageShape);
-    
+    PCmeanMorph.Vertices = sharedMean;
+
     PCplusMorph = clone(AverageShape);
-    PCplusMorph.Vertices = meanPoints + Transform*sigma*k;
+    PCplusMorph.Vertices = sharedMean + Transform*sigma*k;
     
     % Set the mesh color to black
     PCminusMorph.SingleColor = [0 0 0];
@@ -884,7 +1033,7 @@ for variation_idx = 1:length(foot_length_levels)
     v_std = mean(Dstd, 1); v_std = v_std / norm(v_std);
     v_con = mean(Dcon, 1); v_con = v_con / norm(v_con);
     
-    arrowLength = 50; % mm
+    arrowLength = 50;
     
     % Define contact region (e.g., y < 1 mm)
     isContact = meanVerts(:,2) < 1; % Logical index of contact points
@@ -946,7 +1095,7 @@ for variation_idx = 1:length(foot_length_levels)
     %% ------- EVALUATION METRICS -----------------------------------------
 
     % Precompute means for Procrustes once
-    mean_ground_truth  = rowVectorToArray(meanShapeVec);     % original mean
+    mean_ground_truth = rowVectorToArray(meanShapeVec);     % original mean
     mean_std = mean(SyntheticData3D_standardGPA,3);          % std‐GPA mean
     mean_con = mean(SyntheticData3D_constrainedGPA,3);       % con‐GPA mean
 
@@ -969,9 +1118,20 @@ for variation_idx = 1:length(foot_length_levels)
         est_con_k = coeff_cGPA(:,k);
         est_con_k = est_con_k / norm(est_con_k);
 
+        % Flip sign if necessary to align with ground-truth
+        if dot(ground_truth_k, est_std_k) < 0
+            est_std_k = -est_std_k;
+        end
+        cosine_similarity_std_k = dot(ground_truth_k, est_std_k);
+
+        if dot(ground_truth_k, est_con_k) < 0
+            est_con_k = -est_con_k;
+        end
+        cosine_similarity_con_k = dot(ground_truth_k, est_con_k);
+
         % cosine similarity (absolute)
-        cosine_similarity_std_k = abs(dot(ground_truth_k, est_std_k));
-        cosine_similarity_con_k = abs(dot(ground_truth_k, est_con_k));
+        % cosine_similarity_std_k = abs(dot(ground_truth_k, est_std_k));
+        % cosine_similarity_con_k = abs(dot(ground_truth_k, est_con_k));
 
         % variance explained in percent
         % Only for PCs actually varied, compare to synthetic shape-space variance)
@@ -1019,6 +1179,8 @@ for variation_idx = 1:length(foot_length_levels)
         csv_filename = fullfile(output_dir, sprintf('results_variation_%d.csv', variation_val));
         writetable(results_table, csv_filename);
     end
+
+    close all;
 
 end % Ende der foot_length_levels Schleife
 
