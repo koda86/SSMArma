@@ -154,14 +154,21 @@ fprintf('[PC2 calibration] Symmetric PC2 causes %.2f mm change per unit weight.\
 scaling_factor = 1 / delta_length_per_unit;
 footLengthVec_flat_scaled = footLengthVec_flat * scaling_factor;
 
-% === Final ground truth PCs (PC1 from real PCA, PC2 = calibrated foot length) ===
+% Final ground truth PCs (PC1 from real PCA, PC2 = calibrated foot length)
 ground_truth_pcs = [coeff(:,1), footLengthVec_flat_scaled'];
+
+% Use the next three PCs from the original pca(Y) as low-variance noise modes
+noise_pcs = coeff(:,3:5); % size 3n×3
+
+% Build a 3n×5 basis: [PC1, PC2, PC3, PC4, PC5]
+full_pc_basis = [ground_truth_pcs, noise_pcs];
 
 foot_length_levels = [0, 2, 5, 10, 20, 30, 40, 50]; % in mm
 % foot_length_levels = [0, 2, 50]; % in mm
-results = struct();
 
 nPCsToUse = size(ground_truth_pcs, 2); % 5;
+
+results = struct();
 
 for variation_idx = 1:length(foot_length_levels)
 
@@ -170,33 +177,59 @@ for variation_idx = 1:length(foot_length_levels)
     % Define the variation amplitude for PC1 (arch height) and PC2 (foot length)
     L_shape = 40; % fixed shape variation along PC1
     L_length = foot_length_levels(variation_idx); % variable: foot length variation along PC2
+
+    % Create a 5×5 grid for PC1 and PC2
+    range_shape  = linspace(-L_shape, L_shape, 5);      % fixed arch variation
+    range_length = linspace(-L_length, L_length, 5);    % varying foot length
+    [W1, W2] = meshgrid(range_shape, range_length);     % W2 now controls foot length
+    W = [W1(:), W2(:)]; % 25 × 2 matrix
     
-    useDeterministicWeights = true;
+    nSynthetic = size(W, 1);
     
-    if useDeterministicWeights
-        % Create a 5×5 grid for PC1 and PC2
-        range_shape  = linspace(-L_shape, L_shape, 5);      % fixed arch variation
-        range_length = linspace(-L_length, L_length, 5);    % varying foot length
-        [W1, W2] = meshgrid(range_shape, range_length);     % W2 now controls foot length
-        W = [W1(:), W2(:)]; % 25 × 2 matrix
-        nSynthetic = size(W, 1);
-    else
-        W = [(2*rand(nSynthetic,1)-1)*L_shape, ...
-             (2*rand(nSynthetic,1)-1)*L_length];
-    end
+    noise_sd = 15; % mm
     
-    % Zero out all PCs, then inject weights into PC1 and PC2
-    W_full = zeros(nSynthetic, 2);
+    rng(2, 'twister');
+    noise_W = noise_sd * randn(nSynthetic, 3);  % 25×3
+
+    W_full = [ W, noise_W ];
+
+    % useDeterministicWeights = true;
     
-    % PC1 = shape (arch), PC2 = foot length
-    W_full(:,1) = W(:,1); % shape
-    W_full(:,2) = W(:,2); % foot length (inserted as 2nd PC)
-    
+    % if useDeterministicWeights
+    %     % Create a 5×5 grid for PC1 and PC2
+    %     range_shape  = linspace(-L_shape, L_shape, 5);      % fixed arch variation
+    %     range_length = linspace(-L_length, L_length, 5);    % varying foot length
+    %     [W1, W2] = meshgrid(range_shape, range_length);     % W2 now controls foot length
+    %     W = [W1(:), W2(:)]; % 25 × 2 matrix
+    %     nSynthetic = size(W, 1);
+    % else
+    %     W = [(2*rand(nSynthetic,1)-1)*L_shape, ...
+    %          (2*rand(nSynthetic,1)-1)*L_length];
+    % end
+    % 
+    % % Zero out all PCs, then inject weights into PC1 and PC2
+    % W_full = zeros(nSynthetic, 2);
+    % 
+    % % PC1 = shape (arch), PC2 = foot length
+    % W_full(:,1) = W(:,1); % shape
+    % W_full(:,2) = W(:,2); % foot length (inserted as 2nd PC)
+    % 
+    % SyntheticData3D = zeros(nVertices, 3, nSynthetic);
+    % 
+    % for i = 1:nSynthetic
+    %     weights = W_full(i,:); % 1×nPCsToUse
+    %     shapeVec = meanShapeVec + weights * ground_truth_pcs';
+    %     SyntheticData3D(:,:,i) = rowVectorToArray(shapeVec);
+    % end
+
+    % Variante mit noise
     SyntheticData3D = zeros(nVertices, 3, nSynthetic);
-    
+
     for i = 1:nSynthetic
-        weights = W_full(i,:); % 1×nPCsToUse
-        shapeVec = meanShapeVec + weights * ground_truth_pcs';
+        all_weights = W_full(i,:);
+
+        shapeVec = meanShapeVec + all_weights * full_pc_basis';
+        
         SyntheticData3D(:,:,i) = rowVectorToArray(shapeVec);
     end
 
@@ -217,23 +250,23 @@ for variation_idx = 1:length(foot_length_levels)
     % delta_mm = len2 - len0;
 
     %% Füße plotten
-    % n_feet = size(SyntheticData3D, 3); % number of feet to visualize
-    % 
-    % mFace = shape3D;
-    % v=viewer(mFace);
-    % 
-    % for f = 1:5 % n_feet
-    %     shp = shape3D;
-    %     shp.Vertices = SyntheticData3D(:,:,f);
-    % 
-    %     viewer(shp,v);
-    % end
-    % 
-    % set(gcf, 'Color', 'w'); % white background
-    % set(gca, 'Color', 'w'); % white axes background
-    % axis tight off; % remove axes and fit bounds
-    % camproj('orthographic'); % optional: parallel view
-    % set(gca, 'Position', [0 0 1 1]); % remove all margins
+    n_feet = size(SyntheticData3D, 3); % number of feet to visualize
+
+    mFace = shape3D;
+    v=viewer(mFace);
+
+    for f = 1:n_feet
+        shp = shape3D;
+        shp.Vertices = SyntheticData3D(:,:,f);
+
+        viewer(shp,v);
+    end
+
+    set(gcf, 'Color', 'w'); % white background
+    set(gca, 'Color', 'w'); % white axes background
+    axis tight off; % remove axes and fit bounds
+    camproj('orthographic'); % optional: parallel view
+    set(gca, 'Position', [0 0 1 1]); % remove all margins
 
     % % Save figure
     % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\simulated_point_clouds';
@@ -487,16 +520,16 @@ for variation_idx = 1:length(foot_length_levels)
     end
     
     %% Füße plotten
-    n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
-
-    mFace = shape3D;
-    v=viewer(mFace);
-    for f = 1:n_feet
-        shp = shape3D; % create shape 3D
-        shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
-
-        viewer(shp,v);
-    end
+    % n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
+    % 
+    % mFace = shape3D;
+    % v=viewer(mFace);
+    % for f = 1:n_feet
+    %     shp = shape3D; % create shape 3D
+    %     shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
+    % 
+    %     viewer(shp,v);
+    % end
     % 
     % % Save the figure
     % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK';
@@ -782,7 +815,7 @@ for variation_idx = 1:length(foot_length_levels)
     
     % Main constrained‐GPA loop
     iter  = 10;
-    scale = true;  % keep horizontal (anisotropic) scaling ON
+    scale = true; % keep horizontal (anisotropic) scaling ON
     
     for i = 1:iter
         for f = 1:nShapes
@@ -805,16 +838,16 @@ for variation_idx = 1:length(foot_length_levels)
     end
     
     %% Füße plotten
-    n_feet = size(SyntheticData3D_constrainedGPA, 3); % number of feet to visualize
-
-    mFace = shape3D;
-    v=viewer(mFace);
-    for f = 1:n_feet
-        shp = shape3D; % create shape 3D
-        shp.Vertices = SyntheticData3D_constrainedGPA(:,:,f);
-
-        viewer(shp,v);
-    end
+    % n_feet = size(SyntheticData3D_constrainedGPA, 3); % number of feet to visualize
+    % 
+    % mFace = shape3D;
+    % v=viewer(mFace);
+    % for f = 1:n_feet
+    %     shp = shape3D; % create shape 3D
+    %     shp.Vertices = SyntheticData3D_constrainedGPA(:,:,f);
+    % 
+    %     viewer(shp,v);
+    % end
     % 
     % % Save the figure
     % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK';
@@ -1032,6 +1065,11 @@ for variation_idx = 1:length(foot_length_levels)
     v_gt  = mean(Dgt,  1); v_gt  = v_gt  / norm(v_gt);
     v_std = mean(Dstd, 1); v_std = v_std / norm(v_std);
     v_con = mean(Dcon, 1); v_con = v_con / norm(v_con);
+
+    % Force v_con into the same hemisphere as v_gt
+    if dot(v_con, v_gt) < 0
+        v_con = -v_con;
+    end
     
     arrowLength = 50;
     
@@ -1100,11 +1138,11 @@ for variation_idx = 1:length(foot_length_levels)
     mean_con = mean(SyntheticData3D_constrainedGPA,3);       % con‐GPA mean
 
     % Compute ground-truth explained variance in SHAPE space
-    v_weights  = var(W_full);                               % variance of PC weights
-    v_pcnorms  = vecnorm(ground_truth_pcs).^2;              % squared norm of each PC in shape space
-    v_shape    = v_weights .* v_pcnorms;                    % variance contribution per PC in shape space
-    v_shape_total = sum(v_shape);                           % total shape variance from all varied PCs
-    var_ground_truth_percent = v_shape / v_shape_total * 100;         % explained by each ground-truth PC
+    v_weights  = var(W_full);                  % 1×5
+    v_pcnorms  = vecnorm(full_pc_basis).^2;    % 1×5  ← match v_weights
+    v_shape    = v_weights .* v_pcnorms;       % 1×5
+    v_shape_total           = sum(v_shape);
+    var_ground_truth_percent = v_shape / v_shape_total * 100;
 
     fprintf('\n=== Recovery Metrics for variation L=%g ===\n', foot_length_levels(variation_idx));
     for k = 1:nPCsToUse
