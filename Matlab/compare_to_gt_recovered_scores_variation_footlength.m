@@ -53,7 +53,7 @@ end
 
 % Define a threshold range around a desired foot length in mm
 desiredLength = 270; % 270 mm corresponds to (roughly) EU size 42
-tolerance = 0.5; % Possible values (in mm): 0.5, 2.5, 5, 10, 20, 50
+tolerance = 0.1; % Possible values (in mm): 0.5, 2.5, 5, 10, 20, 50
 
 keepSlices = abs(foot_lengths - desiredLength) <= tolerance;
 DataMatrix3D = DataMatrix3D(:,:,keepSlices);
@@ -164,7 +164,6 @@ noise_pcs = coeff(:,3:5); % size 3n×3
 full_pc_basis = [ground_truth_pcs, noise_pcs];
 
 foot_length_levels = [0, 2, 5, 10, 20, 30, 40, 50]; % in mm
-foot_length_levels = [0, 2]; % in mm
 
 nPCsToUse = size(ground_truth_pcs, 2); % 5;
 
@@ -500,6 +499,13 @@ for variation_idx = 1:length(foot_length_levels)
 
     GPA = "standardGPA"; % for export naming
 
+    % % Temporäre Zwischenvariablen --> später löschen
+    meanPoints = mean(SyntheticData3D_standardGPA, 3); % mean(DataMatrix3D,3);
+    % nShapes = size(DataMatrix3D,3);
+    nShapes = size(SyntheticData3D_standardGPA,3);
+    % % meanShapeVec = mean(arrayToRowVector(DataMatrix3D), 1); 
+    % % sharedMean = rowVectorToArray(meanShapeVec);  % N × 3
+
     % Parameters
     maxIter = 10;       % same number of iterations as before
     tol     = 1e-6;     % convergence threshold
@@ -531,23 +537,22 @@ for variation_idx = 1:length(foot_length_levels)
         meanPoints = Mnew;
         SyntheticData3D_standardGPA = AlignedData;
     end
-    
-    % After this loop:
-    %   meanPoints                = consensus mean shape (unit size)
-    %   SyntheticData3D_standardGPA(:,:,f) = each shape aligned into that frame
 
+    % sharedMean = meanPoints;
+    meanShapeVec = mean(arrayToRowVector(SyntheticData3D_standardGPA), 1); 
+    sharedMean = rowVectorToArray(meanShapeVec);  % N × 3
     
     %% Füße plotten
-    n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
-
-    mFace = shape3D;
-    v=viewer(mFace);
-    for f = 1:n_feet
-        shp = shape3D; % create shape 3D
-        shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
-
-        viewer(shp,v);
-    end
+    % n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
+    % 
+    % mFace = shape3D;
+    % v=viewer(mFace);
+    % for f = 1:n_feet
+    %     shp = shape3D; % create shape 3D
+    %     shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
+    % 
+    %     viewer(shp,v);
+    % end
     % 
     % % Save the figure
     % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK';
@@ -622,7 +627,21 @@ for variation_idx = 1:length(foot_length_levels)
     % Percentage of total variance explained by each PC
     explained_sGPA = latent_sGPA / sum(latent_sGPA) * 100;
 
+    %% Create and store shape deformation plots
+    % PCnum = 1;                % first principal component
+    % k     = 3;                % ±3σ
+    % variation_idx = s;        % whichever variation you’re visualizing
+    % 
+    % exportPath = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\visualize_PCs_sample_size';
+    % 
+    % visualizePCMorph(coeff_sGPA, latent_sGPA, PCnum, sharedMean, k, ...
+    %              'standardGPA', temporary_number_objects, variation_idx, ...
+    %              exportPath);
+
     %% Visualise principal component by transforming average face
+
+    PCnum = 1;
+    k = 3; % Scaling factor
 
     Transform = arrayVector2Structure(coeff_sGPA(:,PCnum)');
     sigma = sqrt(latent_sGPA(PCnum));
@@ -780,7 +799,6 @@ for variation_idx = 1:length(foot_length_levels)
     
     %% Constrained Generalized Procrustes Analysis (DK)
     
-    % Start from your synthetic shapes (with true length variation)
     SyntheticData3D_constrainedGPA = SyntheticData3D;
     
     GPA = "constrainedGPA";  % for export naming
@@ -855,6 +873,10 @@ for variation_idx = 1:length(foot_length_levels)
         meanPoints = mean(SyntheticData3D_constrainedGPA,3);
     end
     
+    % sharedMean = meanPoints;
+    meanShapeVec = mean(arrayToRowVector(SyntheticData3D_constrainedGPA), 1); 
+    sharedMean = rowVectorToArray(meanShapeVec);  % N × 3
+
     %% Füße plotten
     % n_feet = size(SyntheticData3D_constrainedGPA, 3); % number of feet to visualize
     % 
