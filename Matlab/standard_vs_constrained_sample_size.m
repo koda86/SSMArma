@@ -173,6 +173,17 @@ for s = 1:numel(sampleSizes)
     % Percentage of total variance explained by each PC
     explained_sGPA = latent_sGPA / sum(latent_sGPA) * 100;
 
+    %% Create and store shape deformation plots
+    PCnum = 1;                % first principal component
+    k     = 3;                % ±3σ
+    variation_idx = 2;        % whichever variation you’re visualizing
+
+    exportPath = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\visualize_PCs_sample_size';
+
+    visualizePCMorph(coeff_sGPA, latent_sGPA, PCnum, sharedMean, k, ...
+                 'standardGPA', temporary_number_objects, variation_idx, ...
+                 exportPath);
+
     %% Constrained Generalized Procrustes Analysis (DK)
 
     % Start from your synthetic shapes (with true length variation)
@@ -261,6 +272,17 @@ for s = 1:numel(sampleSizes)
     % Percentage of total variance explained by each PCverify if PC1 really captures foot length
     explained_cGPA = latent_cGPA / sum(latent_cGPA) * 100;
 
+    %% Create and store shape deformation plots
+    PCnum = 1;                % first principal component
+    k     = 3;                % ±3σ
+    variation_idx = 2;        % whichever variation you’re visualizing
+
+    exportPath = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\visualize_PCs_sample_size';
+
+    visualizePCMorph(coeff_cGPA, latent_sGPA, PCnum, sharedMean, k, ...
+                 'constrainedGPA', temporary_number_objects, variation_idx, ...
+                 exportPath);
+
     %% PCs der drei Methoden vergleichsweise plotten
 
     % --- Plot Mean Shape + PC1 Arrows for GT, Std‐GPA & Constrained‐GPA --
@@ -322,15 +344,11 @@ for s = 1:numel(sampleSizes)
     set(hFig, 'MenuBar', 'none', 'ToolBar', 'none');
     
     % Save figure
-    % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\PC_vectors_simulation';
-    % variation_val = foot_length_levels(variation_idx);
-    % figName = sprintf('meanShape_PC1_variation_%d', variation_val);
-    
-    % Save as MATLAB figure
-    % savefig(hFig, fullfile(output_dir, [figName '.fig']));
-    % 
-    % % Save as PNG
-    % saveas(hFig, fullfile(output_dir, [figName '.png']));
+    output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\PC_vectors_simulation_sample_size';
+    figName = sprintf('meanShape_PC1_variation_%d', s);
+   
+    % Save as PNG
+    saveas(hFig, fullfile(output_dir, [figName '.png']));
 
     %%%%%
 end
@@ -338,416 +356,6 @@ end
 
 
 
-
-%% Visualise principal component by transforming average face
-
-Transform = arrayVector2Structure(coeff_sGPA(:,PCnum)');
-sigma = sqrt(latent_sGPA(PCnum));
-
-AverageShape = shape3D;
-AverageShape.Vertices = sharedMean;
-
-% Apply PC to visualize -3σ and +3σ deformations
-PCminusMorph = clone(AverageShape);
-PCminusMorph.Vertices = sharedMean + Transform*sigma*-k;
-
-PCmeanMorph = clone(AverageShape);
-PCmeanMorph.Vertices = sharedMean;
-
-PCplusMorph = clone(AverageShape);
-PCplusMorph.Vertices = sharedMean + Transform*sigma*k;
-
-% Set the mesh color to black
-PCminusMorph.SingleColor = [0 0 0];
-PCmeanMorph.SingleColor = [0 0 0];
-PCplusMorph.SingleColor = [0 0 0];
-
-% Create three plots (-3*sigma, mean, 3*sigma). Plot each in a separate
-% viewer.
-
-% Viewer 1 (mean - 3*sigma) -----------------------------------------------
-v1 = viewer(PCminusMorph);
-set(gcf, 'Color', [1 1 1]); % Set white background
-set(gca, 'Color', [1 1 1]); % Set white background
-% title('PCminusMorph');
-v1.SceneLightLinked = true;
-v1.SceneLightVisible = true;
-
-% Export as .fig
-cd 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\visualize_PCs';
-
-se0 = "n";
-se1 = num2str(temporary_number_objects);
-se2 = "_";
-se3 = num2str(variation_idx);
-se4 = "_PC";
-se5 = num2str(PCnum);
-se6 = "_minus_morph_";
-se7 = GPA;
-se8 = ".fig";
-sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-
-% savefig(gcf, sges);
-
-% Export as .png
-
-% Variante 1 (mit top, bottom, und medial view)
-% Define the specific desired views
-angles = {
-    [0, 1, 0];  % Top view (bird perspective, transversal plane)
-    [0, 0, 1];  % Medial side view (sagittal plane, medial view)
-    [0, -1, 0];  % Bottom view (observer below the foot)
-};
-
-% Corresponding camera-up vectors
-camups = {
-    [0, 0, 0];  % top view: heel bottom, toes top
-    [0, 1, 0];  % medial side view: vertical axis up
-    [0, 0, 0];  % bottom view: heel top, toes bottom
-};
-
-view_names = {'top', 'medial', 'bottom'};
-
-for i = 1:length(angles)
-    figHandle = v1.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_minus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-
-% Viewer 2 (mean) ---------------------------------------------------------
-v2 = viewer(PCmeanMorph);
-
-% Set white background
-set(gcf, 'Color', [1 1 1]);
-set(gca, 'Color', [1 1 1]);
-
-% title('PCmeanMorph');
-v2.SceneLightLinked = true;
-v2.SceneLightVisible = true;
-
-se8 = ".fig";
-sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-
-% Export as .fig
-savefig(gcf, sges);
-
-% Export as .png
-for i = 1:length(angles)
-    figHandle = v2.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_mean_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-% Viewer 3 (mean + 3*sigma) -----------------------------------------------
-v3 = viewer(PCplusMorph);
-
-% Set white background
-set(gcf, 'Color', [1 1 1]);
-set(gca, 'Color', [1 1 1]);
-
-% title('PCplusMorph');
-v3.SceneLightLinked = true;
-v3.SceneLightVisible = true;
-
-% Export as .fig
-% se8 = ".fig";
-% sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-% savefig(gcf, sges);
-
-% Export as .png
-for i = 1:length(angles)
-    figHandle = v3.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_plus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-    
-
-    
-%% Füße plotten
-% n_feet = size(SyntheticData3D_constrainedGPA, 3); % number of feet to visualize
-% 
-% mFace = shape3D;
-% v=viewer(mFace);
-% for f = 1:n_feet
-%     shp = shape3D; % create shape 3D
-%     shp.Vertices = SyntheticData3D_constrainedGPA(:,:,f);
-% 
-%     viewer(shp,v);
-% end
-% 
-% % Save the figure
-% output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK';
-% fig_name = 'constrainedGPA_foot_overlay';
-% 
-% % Get current figure handle
-% hFig = gcf;
-% 
-% % Save as high-res .png
-% exportgraphics(hFig, fullfile(output_dir, [fig_name '.png']), 'Resolution', 300, 'BackgroundColor', 'white');
-
-
-    
-%% Visualise principal component by transforming average face
-
-Transform = arrayVector2Structure(coeff_cGPA(:,PCnum)');
-sigma = sqrt(latent_cGPA(PCnum));
-
-AverageShape = shape3D;
-AverageShape.Vertices = meanPoints;
-
-% add transform scaled according to  z-score of +/- 3 onto average vertices
-% to visualise PC
-PCminusMorph = clone(AverageShape); % clone makes a deep copy of the mean shape
-PCminusMorph.Vertices = sharedMean + Transform*sigma*-k;
-
-PCmeanMorph = clone(AverageShape);
-PCmeanMorph.Vertices = sharedMean;
-
-PCplusMorph = clone(AverageShape);
-PCplusMorph.Vertices = sharedMean + Transform*sigma*k;
-
-% Set the mesh color to black
-PCminusMorph.SingleColor = [0 0 0];
-PCmeanMorph.SingleColor = [0 0 0];
-PCplusMorph.SingleColor = [0 0 0];
-
-% Create three plots (-3*sigma, mean, 3*sigma). Plot each in a separate
-% viewer.
-
-% Viewer 1 (mean - 3*sigma) -----------------------------------------------
-v1 = viewer(PCminusMorph);
-set(gcf, 'Color', [1 1 1]); % Set white background
-set(gca, 'Color', [1 1 1]); % Set white background
-% title('PCminusMorph');
-v1.SceneLightLinked = true;
-v1.SceneLightVisible = true;
-
-% Export as .fig
-cd 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\visualize_PCs';
-
-se0 = "n";
-se1 = num2str(temporary_number_objects);
-se2 = "_";
-se3 = num2str(variation_idx);
-se4 = "_PC";
-se5 = num2str(PCnum);
-se6 = "_minus_morph_";
-se7 = GPA;
-se8 = ".fig";
-sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-
-% savefig(gcf, sges);
-
-% Export as .png
-
-% Variante 1 (mit top, bottom, und medial view)
-% Define the specific desired views
-angles = {
-    [0, 1, 0];  % Top view (bird perspective, transversal plane)
-    [0, 0, 1];  % Medial side view (sagittal plane, medial view)
-    [0, -1, 0];  % Bottom view (observer below the foot)
-};
-
-% Corresponding camera-up vectors
-camups = {
-    [0, 0, 0];  % top view: heel bottom, toes top
-    [0, 1, 0];  % medial side view: vertical axis up
-    [0, 0, 0];  % bottom view: heel top, toes bottom
-};
-
-view_names = {'top', 'medial', 'bottom'};
-
-for i = 1:length(angles)
-    figHandle = v1.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_minus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-
-% Viewer 2 (mean) ---------------------------------------------------------
-v2 = viewer(PCmeanMorph);
-
-% Set white background
-set(gcf, 'Color', [1 1 1]);
-set(gca, 'Color', [1 1 1]);
-
-% title('PCmeanMorph');
-v2.SceneLightLinked = true;
-v2.SceneLightVisible = true;
-
-se8 = ".fig";
-sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-
-% Export as .fig
-savefig(gcf, sges);
-
-% Export as .png
-for i = 1:length(angles)
-    figHandle = v2.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_mean_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-% Viewer 3 (mean + 3*sigma) -----------------------------------------------
-v3 = viewer(PCplusMorph);
-
-% Set white background
-set(gcf, 'Color', [1 1 1]);
-set(gca, 'Color', [1 1 1]);
-
-% title('PCplusMorph');
-v3.SceneLightLinked = true;
-v3.SceneLightVisible = true;
-
-% Export as .fig
-% se8 = ".fig";
-% sges= strcat(se0,se1,se2,se3,se4,se5,se6,se7,se8);
-% savefig(gcf, sges);
-
-% Export as .png
-for i = 1:length(angles)
-    figHandle = v3.Figure;
-    figHandle.Color = [1 1 1]; % White background
-    ax = findall(figHandle, 'Type', 'Axes');
-    set(ax, 'Color', [1 1 1]);
-
-    % Set view angles explicitly
-    view(angles{i});
-    camup(camups{i});
-
-    % Construct a clear filename for export
-    filename = sprintf('%s%s_%s_PC%d_plus_%s_%s.png', se0, se1, se3, PCnum, GPA, view_names{i});
-
-    % Export as PNG
-    exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
-end
-
-%% PCs der drei Methoden vergleichsweise plotten
-
-% --- Plot Mean Shape + PC1 Arrows for GT, Std‐GPA & Constrained‐GPA --
-
-% Compute the mean‐shape cloud and its centroid
-meanShapeVec = mean(arrayToRowVector(SyntheticData3D), 1);
-meanVerts = rowVectorToArray(meanShapeVec); % N×3
-centroid = mean(meanVerts,1); % 1×3
-
-% Extract the three PC1 vectors and reshape to N×3
-Dstd = reshape(coeff_sGPA(:,1), [], 3);
-Dcon = reshape(coeff_cGPA(:,1), [], 3);
-
-% Collapse each field to one 1×3 direction and normalize
-v_std = mean(Dstd, 1); v_std = v_std / norm(v_std);
-v_con = mean(Dcon, 1); v_con = v_con / norm(v_con);
-
-arrowLength = 50;
-
-% Define contact region (e.g., y < 1 mm)
-isContact = meanVerts(:,2) < 1; % Logical index of contact points
-
-% Plot without title or legend
-hFig = figure('Color', 'w');
-hold on;
-
-% Plot contact region points (e.g., in gray)
-scatter3(meanVerts(isContact,1), meanVerts(isContact,2), meanVerts(isContact,3), ...
-         5, [0.6 0.6 0.6], 'filled');
-
-% Plot non-contact points (in black)
-scatter3(meanVerts(~isContact,1), meanVerts(~isContact,2), meanVerts(~isContact,3), ...
-         5, 'k', 'filled');
-
-% PC1 arrows
-quiver3(centroid(1), centroid(2), centroid(3), ...
-        v_std(1)*arrowLength, v_std(2)*arrowLength, v_std(3)*arrowLength, ...
-        0, 'g', 'LineWidth',2, 'MaxHeadSize',0.8);
-quiver3(centroid(1), centroid(2), centroid(3), ...
-        v_con(1)*arrowLength, v_con(2)*arrowLength, v_con(3)*arrowLength, ...
-        0, 'b', 'LineWidth',2, 'MaxHeadSize',0.8);
-
-% View and minimalistic display
-view([0 -30 10]);          
-camproj('orthographic');   
-rotate3d on;
-
-% Tighten axes around point cloud — ADD THIS
-xlim([min(meanVerts(:,1)) max(meanVerts(:,1))]);
-ylim([min(meanVerts(:,2)) max(meanVerts(:,2))]);
-zlim([min(meanVerts(:,3)) max(meanVerts(:,3))]);
-
-% Make axes fill the figure area — ADD THIS
-set(gca, 'Position', [0 0 1 1]);
-
-% Hide everything
-axis equal off;
-set(gca, 'Visible', 'off', 'Box', 'off');
-set(hFig, 'MenuBar', 'none', 'ToolBar', 'none');
-
-% Save figure
-% output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK\PC_vectors_simulation';
-% variation_val = foot_length_levels(variation_idx);
-% figName = sprintf('meanShape_PC1_variation_%d', variation_val);
-
-% Save as MATLAB figure
-% savefig(hFig, fullfile(output_dir, [figName '.fig']));
-% 
-% % Save as PNG
-% saveas(hFig, fullfile(output_dir, [figName '.png']));
 
     %% ------- EVALUATION METRICS -----------------------------------------
 
