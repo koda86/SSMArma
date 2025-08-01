@@ -164,7 +164,7 @@ noise_pcs = coeff(:,3:5); % size 3n×3
 full_pc_basis = [ground_truth_pcs, noise_pcs];
 
 foot_length_levels = [0, 2, 5, 10, 20, 30, 40, 50]; % in mm
-% foot_length_levels = [0, 2, 50]; % in mm
+foot_length_levels = [0, 2]; % in mm
 
 nPCsToUse = size(ground_truth_pcs, 2); % 5;
 
@@ -178,13 +178,16 @@ for variation_idx = 1:length(foot_length_levels)
     L_shape = 40; % fixed shape variation along PC1
     L_length = foot_length_levels(variation_idx); % variable: foot length variation along PC2
 
-    % Create a 5×5 grid for PC1 and PC2
-    range_shape  = linspace(-L_shape, L_shape, 5);      % fixed arch variation
-    range_length = linspace(-L_length, L_length, 5);    % varying foot length
+    gridSize = ceil(sqrt(1000)); % 5 (25), 10 (100), ceil(sqrt(1000)) (1024), 
+    range_shape  = linspace(-L_shape,  L_shape,  gridSize); % arch variation
+    range_length = linspace(-L_length, L_length, gridSize); % foot length variation
     [W1, W2] = meshgrid(range_shape, range_length);     % W2 now controls foot length
     W = [W1(:), W2(:)]; % 25 × 2 matrix
     
     nSynthetic = size(W, 1);
+
+    syntheticNames = arrayfun(@(i) sprintf('synthetic_%03d',i), 1:nSynthetic, ...
+                          'UniformOutput',false);
     
     noise_sd = 15; % mm
     
@@ -192,35 +195,6 @@ for variation_idx = 1:length(foot_length_levels)
     noise_W = noise_sd * randn(nSynthetic, 3);  % 25×3
 
     W_full = [ W, noise_W ];
-
-    % useDeterministicWeights = true;
-    
-    % if useDeterministicWeights
-    %     % Create a 5×5 grid for PC1 and PC2
-    %     range_shape  = linspace(-L_shape, L_shape, 5);      % fixed arch variation
-    %     range_length = linspace(-L_length, L_length, 5);    % varying foot length
-    %     [W1, W2] = meshgrid(range_shape, range_length);     % W2 now controls foot length
-    %     W = [W1(:), W2(:)]; % 25 × 2 matrix
-    %     nSynthetic = size(W, 1);
-    % else
-    %     W = [(2*rand(nSynthetic,1)-1)*L_shape, ...
-    %          (2*rand(nSynthetic,1)-1)*L_length];
-    % end
-    % 
-    % % Zero out all PCs, then inject weights into PC1 and PC2
-    % W_full = zeros(nSynthetic, 2);
-    % 
-    % % PC1 = shape (arch), PC2 = foot length
-    % W_full(:,1) = W(:,1); % shape
-    % W_full(:,2) = W(:,2); % foot length (inserted as 2nd PC)
-    % 
-    % SyntheticData3D = zeros(nVertices, 3, nSynthetic);
-    % 
-    % for i = 1:nSynthetic
-    %     weights = W_full(i,:); % 1×nPCsToUse
-    %     shapeVec = meanShapeVec + weights * ground_truth_pcs';
-    %     SyntheticData3D(:,:,i) = rowVectorToArray(shapeVec);
-    % end
 
     % Variante mit noise
     SyntheticData3D = zeros(nVertices, 3, nSynthetic);
@@ -460,76 +434,120 @@ for variation_idx = 1:length(foot_length_levels)
         exportgraphics(figHandle, filename, 'Resolution', 300, 'BackgroundColor', 'current');
     end
     
-    %% Standard GPA
-    
+    % %% Standard GPA
+    % 
+    % SyntheticData3D_standardGPA = SyntheticData3D;
+    % 
+    % GPA = "standardGPA"; % for export naming
+    % 
+    % Template = shape3D;
+    % Template.Vertices = SyntheticData3D(:,:,1);
+    % 
+    % % Center each shape, record its centroid‐size, and normalize to unit‐size
+    % nShapes = size(SyntheticData3D_standardGPA,3);
+    % centroid_sizes = zeros(nShapes,1);
+    % 
+    % for f = 1:nShapes
+    %     pts = SyntheticData3D_standardGPA(:,:,f);
+    %     c = mean(pts,1);
+    %     centered = pts - c;    
+    %     centroid_sizes(f) = norm(centered,'fro');
+    %     % normalize to unit‐size for template selection & initial GPA
+    %     SyntheticData3D_standardGPA(:,:,f) = centered / centroid_sizes(f);
+    % end
+    % 
+    % % Compute the crude mean (unit‐size)
+    % crudeMean = mean(SyntheticData3D_standardGPA,3);
+    % 
+    % % Pick the shape closest (in Frobenius distance) to that mean
+    % dists = zeros(nShapes,1);
+    % for f = 1:nShapes
+    %     diff = SyntheticData3D_standardGPA(:,:,f) - crudeMean;
+    %     dists(f) = norm(diff,'fro')^2;
+    % end
+    % [~, bestIdx] = min(dists);
+    % 
+    % % log which file is your starting template
+    % templateFileName = syntheticNames{bestIdx};
+    % % templateFileName = keptFileNames{bestIdx};
+    % fprintf('Using %s as the starting template (unit‐normalized).\n', templateFileName);
+    % 
+    % % Initialize meanPoints from that selected unit‐size shape
+    % meanPoints = SyntheticData3D_standardGPA(:,:,bestIdx);
+    % 
+    % % Iterative GPA, aligning & re‐scaling each to C_ref every iteration
+    % iter  = 10;   
+    % for i = 1:iter
+    %     for f = 1:nShapes
+    %         % align to current meanPoints (which is at size = C_ref)
+    %         faceVerts = SyntheticData3D_standardGPA(:,:,f);           
+    %         T = computeTransform(faceVerts, meanPoints, true);
+    %         faceVerts = applyTransform(faceVerts, T);
+    % 
+    %         % re‐center (no scaling)
+    %         centered = faceVerts - mean(faceVerts,1);
+    %         SyntheticData3D_standardGPA(:,:,f) = centered;
+    %     end
+    % 
+    %     % update the mean shape and re‐enforce size = C_ref
+    %     meanPoints = mean(SyntheticData3D_standardGPA,3);
+    %     meanPoints = meanPoints / norm(meanPoints,'fro');
+    % end
+
+    %% Standard GPA (neue Version 01.08.2025)
+
     SyntheticData3D_standardGPA = SyntheticData3D;
-    
+
     GPA = "standardGPA"; % for export naming
+
+    % Parameters
+    maxIter = 10;       % same number of iterations as before
+    tol     = 1e-6;     % convergence threshold
     
-    Template = shape3D;
-    Template.Vertices = SyntheticData3D(:,:,1);
+    AlignedData = zeros(size(SyntheticData3D_standardGPA));
     
-    % Center each shape, record its centroid‐size, and normalize to unit‐size
-    nShapes = size(SyntheticData3D_standardGPA,3);
-    centroid_sizes = zeros(nShapes,1);
-    
-    for f = 1:nShapes
-        pts = SyntheticData3D_standardGPA(:,:,f);
-        c = mean(pts,1);
-        centered = pts - c;    
-        centroid_sizes(f) = norm(centered,'fro');
-        % normalize to unit‐size for template selection & initial GPA
-        SyntheticData3D_standardGPA(:,:,f) = centered / centroid_sizes(f);
-    end
-    
-    % Compute the crude mean (unit‐size)
-    crudeMean = mean(SyntheticData3D_standardGPA,3);
-    
-    % Pick the shape closest (in Frobenius distance) to that mean
-    dists = zeros(nShapes,1);
-    for f = 1:nShapes
-        diff = SyntheticData3D_standardGPA(:,:,f) - crudeMean;
-        dists(f) = norm(diff,'fro')^2;
-    end
-    [~, bestIdx] = min(dists);
-    
-    % log which file is your starting template
-    templateFileName = keptFileNames{bestIdx};
-    fprintf('Using %s as the starting template (unit‐normalized).\n', templateFileName);
-    
-    % Initialize meanPoints from that selected unit‐size shape
-    meanPoints = SyntheticData3D_standardGPA(:,:,bestIdx);
-    
-    % Iterative GPA, aligning & re‐scaling each to C_ref every iteration
-    iter  = 10;   
-    for i = 1:iter
+    for iterGPA = 1:maxIter
+        % Align each shape to the current meanPoints via Procrustes
         for f = 1:nShapes
-            % align to current meanPoints (which is at size = C_ref)
-            faceVerts = SyntheticData3D_standardGPA(:,:,f);           
-            T = computeTransform(faceVerts, meanPoints, true);
-            faceVerts = applyTransform(faceVerts, T);
-            
-            % re‐center (no scaling)
-            centered = faceVerts - mean(faceVerts,1);
-            SyntheticData3D_standardGPA(:,:,f) = centered;
+            pts = SyntheticData3D_standardGPA(:,:,f);
+            % [~, Z, ~] returns the aligned points Z
+            [~, Z, ~] = procrustes(meanPoints, pts, ...
+                                   'scaling',    true, ...
+                                   'reflection', false);
+            AlignedData(:,:,f) = Z;
         end
-        
-        % update the mean shape and re‐enforce size = C_ref
-        meanPoints = mean(SyntheticData3D_standardGPA,3);
-        meanPoints = meanPoints / norm(meanPoints,'fro');
+    
+        % Compute updated mean shape
+        Mnew = mean(AlignedData, 3);
+        Mnew = Mnew - mean(Mnew, 1);        % re‐center
+        Mnew = Mnew / norm(Mnew, 'fro');    % unit‐normalize
+    
+        % Check convergence
+        if norm(Mnew - meanPoints, 'fro') < tol
+            break;
+        end
+    
+        % Update for next iteration
+        meanPoints = Mnew;
+        SyntheticData3D_standardGPA = AlignedData;
     end
+    
+    % After this loop:
+    %   meanPoints                = consensus mean shape (unit size)
+    %   SyntheticData3D_standardGPA(:,:,f) = each shape aligned into that frame
+
     
     %% Füße plotten
-    % n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
-    % 
-    % mFace = shape3D;
-    % v=viewer(mFace);
-    % for f = 1:n_feet
-    %     shp = shape3D; % create shape 3D
-    %     shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
-    % 
-    %     viewer(shp,v);
-    % end
+    n_feet = size(SyntheticData3D_standardGPA, 3); % number of feet to visualize
+
+    mFace = shape3D;
+    v=viewer(mFace);
+    for f = 1:n_feet
+        shp = shape3D; % create shape 3D
+        shp.Vertices = SyntheticData3D_standardGPA(:,:,f);
+
+        viewer(shp,v);
+    end
     % 
     % % Save the figure
     % output_dir = 'E:\2025_SSM_ArmaSuisse\Skripte\results_DK';
@@ -790,7 +808,7 @@ for variation_idx = 1:length(foot_length_levels)
     end
     [~, bestIdx] = min(dists);
 
-    templateFileName = keptFileNames{bestIdx};
+    templateFileName = syntheticNames{bestIdx};
     fprintf('Using %s as starting template.\n', templateFileName);
     
     % Initialize meanPoints from that real‐sized template
