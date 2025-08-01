@@ -936,7 +936,7 @@ for variation_idx = 1:length(foot_length_levels)
     sigma = sqrt(latent_cGPA(PCnum));
     
     AverageShape = shape3D;
-    AverageShape.Vertices = meanPoints;
+    AverageShape.Vertices = sharedMean;
     
     % add transform scaled according to  z-score of +/- 3 onto average vertices
     % to visualise PC
