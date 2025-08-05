@@ -2,6 +2,7 @@
 % Modularized script for loading, filtering, and aligning 3D foot point clouds
 
 clear; clc;
+tic;
 addpath(genpath('E:\2025_SSM_ArmaSuisse\Skripte\DK'));
 
 %% CONFIGURATION ----------------------------------------------------------
@@ -42,6 +43,9 @@ DataMatrix3D = alignHeading2D(DataMatrix3D);
 
 % Loop over different foot length variation levels, simulate, analyze, and visualize
 foot_length_levels = [0, 2, 5, 10, 20, 30, 40, 50];
+
+results_cell = cell(length(foot_length_levels),1);
+
 for variation_idx = 1:length(foot_length_levels)
     % Generate synthetic dataset
     [SyntheticData3D, W_full, syntheticNames] = generateSyntheticShapes(...
@@ -65,20 +69,37 @@ for variation_idx = 1:length(foot_length_levels)
     plotPC1Comparison(full_pc_basis, coeff_sGPA, coeff_cGPA, ...
         SyntheticData3D, SyntheticData3D_standardGPA, SyntheticData3D_constrainedGPA, variation_idx, foot_length_levels(variation_idx), cfg.figureDir);
 
-    results(variation_idx) = evaluatePCs(...
+    % Bootstrapped uncertainty estimates cosine similarity
+    N_bootstrap = 50;
+    boot_results = bootstrapCosineSimilarities(...
+        SyntheticData3D, full_pc_basis, N_bootstrap);
+
+    result_struct = evaluatePCs(...
         full_pc_basis, coeff_sGPA, coeff_cGPA, ...
         latent_sGPA, latent_cGPA, ...
         SyntheticData3D, SyntheticData3D_standardGPA, SyntheticData3D_constrainedGPA, ...
         W_full, ...
         variation_idx, foot_length_levels(variation_idx));
 
-    % Save Results as CSV
-    results_table = struct2table(results);
-    csv_filename = fullfile(cfg.csvDir, sprintf('results_variation_%d.csv', foot_length_levels(variation_idx)));
-    writetable(results_table, csv_filename);
+    % Add bootstrap CIs to results
+    result_struct.cosine_sim_std1_mean = boot_results.std1.mean;
+    result_struct.cosine_sim_std1_ci_lower = boot_results.std1.ci(1);
+    result_struct.cosine_sim_std1_ci_upper = boot_results.std1.ci(2);
+    result_struct.cosine_sim_con1_mean = boot_results.con1.mean;
+    result_struct.cosine_sim_con1_ci_lower = boot_results.con1.ci(1);
+    result_struct.cosine_sim_con1_ci_upper = boot_results.con1.ci(2);
+    
+    results_cell{variation_idx} = result_struct;
 end
 
+results_table = struct2table([results_cell{:}]);
+csv_filename = fullfile(cfg.csvDir, 'results_all_variations.csv');
+writetable(results_table, csv_filename);
+
 disp('Full pipeline completed!');
+
+elapsedTime = toc;
+fprintf('Total elapsed time: %.2f seconds (%.2f minutes)\n', elapsedTime, elapsedTime/60);
 
 %% LOCAL FUNCTION DEFINITIONS BELOW ---------------------------------------
 
@@ -390,50 +411,101 @@ function plotPC1Comparison(full_pc_basis, coeff_sGPA, coeff_cGPA, ...
 end
 
 function results = evaluatePCs(full_pc_basis, coeff_sGPA, coeff_cGPA, ...
-        latent_sGPA, latent_cGPA, DataGT, DataStdGPA, DataConGPA, W_full, variation_idx, variation_val)
+    latent_sGPA, latent_cGPA, DataGT, DataStdGPA, DataConGPA, W_full, variation_idx, variation_val)
     % Evaluate recovery metrics for each PC
+
+    MAX_NPCS = 5;  % Set this to your chosen maximum PCs
     results = struct();
-    nPCsToUse = size(full_pc_basis,2); % How many ground-truth PCs?
+
+    nPCsToUse = size(full_pc_basis,2);
     mean_ground_truth = mean(DataGT,3);
     mean_std = mean(DataStdGPA,3);
     mean_con = mean(DataConGPA,3);
+
     % ground-truth explained variance in shape space
     v_weights = var(W_full);
     v_pcnorms = vecnorm(full_pc_basis).^2;
     v_shape = v_weights .* v_pcnorms;
     v_shape_total = sum(v_shape);
     var_ground_truth_percent = v_shape / v_shape_total * 100;
-    for k = 1:nPCsToUse
-        ground_truth_k = full_pc_basis(:,k) / norm(full_pc_basis(:,k));
-        est_std_k = coeff_sGPA(:,k) / norm(coeff_sGPA(:,k));
-        est_con_k = coeff_cGPA(:,k) / norm(coeff_cGPA(:,k));
-        if dot(ground_truth_k, est_std_k) < 0, est_std_k = -est_std_k; end
-        if dot(ground_truth_k, est_con_k) < 0, est_con_k = -est_con_k; end
-        cosine_similarity_std_k = dot(ground_truth_k, est_std_k);
-        cosine_similarity_con_k = dot(ground_truth_k, est_con_k);
-        if v_weights(k) > 0
-            var_ground_truth_k = var_ground_truth_percent(k);
-            var_std_k = latent_sGPA(k) / sum(latent_sGPA) * 100;
-            var_con_k = latent_cGPA(k) / sum(latent_cGPA) * 100;
-            delta_var_std = var_std_k - var_ground_truth_k;
-            delta_var_con = var_con_k - var_ground_truth_k;
+
+    for k = 1:MAX_NPCS
+        if k <= nPCsToUse
+            ground_truth_k = full_pc_basis(:,k) / norm(full_pc_basis(:,k));
+            est_std_k = coeff_sGPA(:,k) / norm(coeff_sGPA(:,k));
+            est_con_k = coeff_cGPA(:,k) / norm(coeff_cGPA(:,k));
+            if dot(ground_truth_k, est_std_k) < 0, est_std_k = -est_std_k; end
+            if dot(ground_truth_k, est_con_k) < 0, est_con_k = -est_con_k; end
+            cosine_similarity_std_k = dot(ground_truth_k, est_std_k);
+            cosine_similarity_con_k = dot(ground_truth_k, est_con_k);
+
+            if v_weights(k) > 0
+                var_ground_truth_k = var_ground_truth_percent(k);
+                var_std_k = latent_sGPA(k) / sum(latent_sGPA) * 100;
+                var_con_k = latent_cGPA(k) / sum(latent_cGPA) * 100;
+                delta_var_std = var_std_k - var_ground_truth_k;
+                delta_var_con = var_con_k - var_ground_truth_k;
+            else
+                var_ground_truth_k = NaN; delta_var_std = NaN; delta_var_con = NaN;
+            end
         else
-            var_ground_truth_k = NaN; delta_var_std = NaN; delta_var_con = NaN;
+            cosine_similarity_std_k = NaN;
+            cosine_similarity_con_k = NaN;
+            delta_var_std = NaN;
+            delta_var_con = NaN;
         end
-        if k==1
-            [d_std, ~, ~] = procrustes(mean_ground_truth, mean_std, 'Scaling', false, 'Reflection', false);
-            [d_con, ~, ~] = procrustes(mean_ground_truth, mean_con, 'Scaling', false, 'Reflection', false);
-        end
-        % store to struct
         results.(['cosine_similarity_std_k' num2str(k)]) = cosine_similarity_std_k;
         results.(['cosine_similarity_con_k' num2str(k)]) = cosine_similarity_con_k;
         results.(['delta_var_std' num2str(k)]) = delta_var_std;
         results.(['delta_var_con' num2str(k)]) = delta_var_con;
         if k==1
-            results.d_std = d_std;
-            results.d_con = d_con;
+            if k <= nPCsToUse
+                [d_std, ~, ~] = procrustes(mean_ground_truth, mean_std, 'Scaling', false, 'Reflection', false);
+                [d_con, ~, ~] = procrustes(mean_ground_truth, mean_con, 'Scaling', false, 'Reflection', false);
+                results.d_std = d_std;
+                results.d_con = d_con;
+            else
+                results.d_std = NaN;
+                results.d_con = NaN;
+            end
         end
     end
     results.variation_idx = variation_idx;
     results.variation_val = variation_val;
+end
+
+function boot_results = bootstrapCosineSimilarities(SyntheticData3D, full_pc_basis, N_bootstrap)
+    % Bootstraps cosine similarities between ground truth PC1 and estimated PC1s after GPA
+
+    nShapes = size(SyntheticData3D,3);
+    boot_cos_sim_std1 = zeros(N_bootstrap, 1);
+    boot_cos_sim_con1 = zeros(N_bootstrap, 1);
+    for b = 1:N_bootstrap
+        idx = randsample(nShapes, nShapes, true);
+        bootData = SyntheticData3D(:,:,idx);
+
+        % Standard GPA and PCA
+        bootData_sGPA = runStandardGPA(bootData);
+        [bootCoeff_sGPA,~,~] = doPCA(bootData_sGPA);
+
+        % Constrained GPA and PCA
+        bootData_cGPA = runConstrainedGPA(bootData);
+        [bootCoeff_cGPA,~,~] = doPCA(bootData_cGPA);
+
+        gt_pc1 = full_pc_basis(:,1) / norm(full_pc_basis(:,1));
+        est_std_pc1 = bootCoeff_sGPA(:,1) / norm(bootCoeff_sGPA(:,1));
+        est_con_pc1 = bootCoeff_cGPA(:,1) / norm(bootCoeff_cGPA(:,1));
+
+        % Sign flip for consistency
+        if dot(gt_pc1, est_std_pc1) < 0, est_std_pc1 = -est_std_pc1; end
+        if dot(gt_pc1, est_con_pc1) < 0, est_con_pc1 = -est_con_pc1; end
+
+        boot_cos_sim_std1(b) = dot(gt_pc1, est_std_pc1);
+        boot_cos_sim_con1(b) = dot(gt_pc1, est_con_pc1);
+    end
+
+    boot_results.std1.mean = mean(boot_cos_sim_std1);
+    boot_results.std1.ci = prctile(boot_cos_sim_std1, [2.5 97.5]);
+    boot_results.con1.mean = mean(boot_cos_sim_con1);
+    boot_results.con1.ci = prctile(boot_cos_sim_con1, [2.5 97.5]);
 end
