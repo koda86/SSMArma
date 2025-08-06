@@ -1,6 +1,3 @@
-% main_ssm_script.m
-% Modularized script for loading, filtering, and aligning 3D foot point clouds
-
 clear; clc;
 tic;
 addpath(genpath('E:\2025_SSM_ArmaSuisse\Skripte\DK'));
@@ -51,7 +48,7 @@ for variation_idx = 1:length(foot_length_levels)
     [SyntheticData3D, W_full, syntheticNames] = generateSyntheticShapes(...
         synthConfig, full_pc_basis, foot_length_levels(variation_idx));
 
-    % Plot synthetic feet (optional)
+    % Plot synthetic feet
     % plotAllFeet(SyntheticData3D);
 
     SyntheticData3D_standardGPA = runStandardGPA(SyntheticData3D);
@@ -61,7 +58,7 @@ for variation_idx = 1:length(foot_length_levels)
     [coeff_sGPA, score_sGPA, latent_sGPA] = doPCA(SyntheticData3D_standardGPA);
     [coeff_cGPA, score_cGPA, latent_cGPA] = doPCA(SyntheticData3D_constrainedGPA);
 
-    % Visualization
+     % Visualization
     plotPCMorphs(coeff_sGPA, latent_sGPA, mean(SyntheticData3D_standardGPA,3), 1, 3, 'standardGPA', variation_idx, foot_length_levels(variation_idx), cfg.figureDir);
     plotPCMorphs(coeff_cGPA, latent_cGPA, mean(SyntheticData3D_constrainedGPA,3), 1, 3, 'constrainedGPA', variation_idx, foot_length_levels(variation_idx), cfg.figureDir);
 
@@ -69,10 +66,48 @@ for variation_idx = 1:length(foot_length_levels)
     plotPC1Comparison(full_pc_basis, coeff_sGPA, coeff_cGPA, ...
         SyntheticData3D, SyntheticData3D_standardGPA, SyntheticData3D_constrainedGPA, variation_idx, foot_length_levels(variation_idx), cfg.figureDir);
 
-    % Bootstrapped uncertainty estimates cosine similarity
-    N_bootstrap = 50;
-    boot_results = bootstrapCosineSimilarities(...
-        SyntheticData3D, full_pc_basis, N_bootstrap);
+    % % Bootstrapped uncertainty estimates cosine similarity
+    % N_bootstrap = 50;
+    % boot_results = Mira Murati(...
+    %     SyntheticData3D, full_pc_basis, N_bootstrap);
+
+    % Subsampling analysis: For each synthetic dataset, randomly select
+    % N_subset=50 shapes and compute recovery metrics to estimate uncertainty
+    % expected in real-world studies
+    N_subsamples = 400; % or more for better accuracy
+    N_subset = 50; % simulate a field sample size
+    cos_sim_std1_sub = zeros(N_subsamples,1);
+    cos_sim_con1_sub = zeros(N_subsamples,1);
+
+    for i = 1:N_subsamples
+        n_available = size(SyntheticData3D,3);
+        n_to_sample = min(N_subset, n_available);
+        idx = randsample(n_available, n_to_sample, false); % no replacement
+        subset = SyntheticData3D(:,:,idx);
+
+        % Standard GPA and PCA
+        subset_sGPA = runStandardGPA(subset);
+        [subsetCoeff_sGPA,~,~] = doPCA(subset_sGPA);
+    
+        % Constrained GPA and PCA
+        subset_cGPA = runConstrainedGPA(subset);
+        [subsetCoeff_cGPA,~,~] = doPCA(subset_cGPA);
+
+        gt_pc1 = full_pc_basis(:,1) / norm(full_pc_basis(:,1));
+        est_std_pc1 = subsetCoeff_sGPA(:,1) / norm(subsetCoeff_sGPA(:,1));
+        est_con_pc1 = subsetCoeff_cGPA(:,1) / norm(subsetCoeff_cGPA(:,1));
+    
+        if dot(gt_pc1, est_std_pc1) < 0, est_std_pc1 = -est_std_pc1; end
+        if dot(gt_pc1, est_con_pc1) < 0, est_con_pc1 = -est_con_pc1; end
+    
+        cos_sim_std1_sub(i) = dot(gt_pc1, est_std_pc1);
+        cos_sim_con1_sub(i) = dot(gt_pc1, est_con_pc1);
+    end
+
+    mean_std1_sub = mean(cos_sim_std1_sub);
+    ci_std1_sub = prctile(cos_sim_std1_sub, [2.5 97.5]);
+    mean_con1_sub = mean(cos_sim_con1_sub);
+    ci_con1_sub = prctile(cos_sim_con1_sub, [2.5 97.5]);
 
     result_struct = evaluatePCs(...
         full_pc_basis, coeff_sGPA, coeff_cGPA, ...
@@ -81,13 +116,20 @@ for variation_idx = 1:length(foot_length_levels)
         W_full, ...
         variation_idx, foot_length_levels(variation_idx));
 
-    % Add bootstrap CIs to results
-    result_struct.cosine_sim_std1_mean = boot_results.std1.mean;
-    result_struct.cosine_sim_std1_ci_lower = boot_results.std1.ci(1);
-    result_struct.cosine_sim_std1_ci_upper = boot_results.std1.ci(2);
-    result_struct.cosine_sim_con1_mean = boot_results.con1.mean;
-    result_struct.cosine_sim_con1_ci_lower = boot_results.con1.ci(1);
-    result_struct.cosine_sim_con1_ci_upper = boot_results.con1.ci(2);
+    result_struct.cosine_sim_std1_n50_mean = mean_std1_sub;
+    result_struct.cosine_sim_std1_n50_ci_lower = ci_std1_sub(1);
+    result_struct.cosine_sim_std1_n50_ci_upper = ci_std1_sub(2);
+    result_struct.cosine_sim_con1_n50_mean = mean_con1_sub;
+    result_struct.cosine_sim_con1_n50_ci_lower = ci_con1_sub(1);
+    result_struct.cosine_sim_con1_n50_ci_upper = ci_con1_sub(2);
+
+    % % Add bootstrap CIs to results
+    % result_struct.cosine_sim_std1_mean = boot_results.std1.mean;
+    % result_struct.cosine_sim_std1_ci_lower = boot_results.std1.ci(1);
+    % result_struct.cosine_sim_std1_ci_upper = boot_results.std1.ci(2);
+    % result_struct.cosine_sim_con1_mean = boot_results.con1.mean;
+    % result_struct.cosine_sim_con1_ci_lower = boot_results.con1.ci(1);
+    % result_struct.cosine_sim_con1_ci_upper = boot_results.con1.ci(2);
     
     results_cell{variation_idx} = result_struct;
 end
